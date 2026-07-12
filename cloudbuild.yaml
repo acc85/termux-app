@@ -44,12 +44,11 @@ steps:
       - name: 'gradle-cache'
         path: '/home/circleci/.gradle'
 
-  # Step 1: Build and Publish the Release APK/AAB to Play Store
+  # Step 1: Build the signed Release AAB
   - name: 'docker.io/cimg/android:2024.04'
     id: 'build-android'
     entrypoint: 'bash'
     secretEnv: [
-      'PLAYSTORE_KEY',
       'RELEASE_KEYSTORE_BASE64',
       'RELEASE_KEYSTORE_PASSWORD',
       'RELEASE_KEY_ALIAS',
@@ -60,9 +59,6 @@ steps:
       - |
         # Fix workspace and cache ownership for non-root container user
         sudo chown -R $$(id -u):$$(id -g) . /home/circleci/.gradle
-        
-        # Write the Play Store API key
-        echo "$$PLAYSTORE_KEY" > play-key.json
         
         # Decode the release keystore file
         echo "$$RELEASE_KEYSTORE_BASE64" | base64 -d > release-key.jks
@@ -77,8 +73,29 @@ steps:
           -Pandroid.injected.signing.store.password=$$RELEASE_KEYSTORE_PASSWORD \
           -Pandroid.injected.signing.key.alias=$$RELEASE_KEY_ALIAS \
           -Pandroid.injected.signing.key.password=$$RELEASE_KEY_PASSWORD
+    volumes:
+      - name: 'gradle-cache'
+        path: '/home/circleci/.gradle'
+
+  # Step 2: Upload signed AAB to custom GCS bucket immediately so it's always accessible
+  - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'backup-aab'
+    args: ['cp', 'app/build/outputs/bundle/release/app-release.aab', 'gs://${_BUCKET_NAME}/builds/$BUILD_ID/app-release.aab']
+
+  # Step 3: Publish the release bundle to internal testing track using Fastlane Supply
+  - name: 'docker.io/cimg/android:2024.04'
+    id: 'publish-play-store'
+    entrypoint: 'bash'
+    secretEnv: [
+      'PLAYSTORE_KEY'
+    ]
+    args:
+      - '-c'
+      - |
+        # Write the Play Store API key
+        echo "$$PLAYSTORE_KEY" > play-key.json
         
-        # Publish the release bundle to internal testing track using Fastlane Supply
+        # Publish the release bundle using Fastlane Supply
         export HOME=/tmp
         fastlane supply --aab app/build/outputs/bundle/release/app-release.aab \
                         --track internal \
@@ -89,9 +106,6 @@ steps:
                         --skip_upload_screenshots true \
                         --skip_upload_changelogs true \
                         --verbose
-    volumes:
-      - name: 'gradle-cache'
-        path: '/home/circleci/.gradle'
 
   # Step 1.5: Save Gradle Cache back to GCS
   - name: 'gcr.io/cloud-builders/gsutil'
