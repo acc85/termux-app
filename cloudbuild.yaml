@@ -137,4 +137,4 @@ availableSecrets:
       env: 'RELEASE_KEY_PASSWORD'
 
 options:
-  logging: CLOUD_LOGGING_ONLY
+  logsBucket: 'gs://termux-play-deploy-builds/logs'
