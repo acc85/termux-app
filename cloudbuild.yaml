@@ -1,0 +1,140 @@
+# Google Cloud Build Configuration for Termux
+# This configuration:
+# 1. Restores the Gradle cache from a GCS bucket.
+# 2. Builds and signs the Release App Bundle (.aab) using keys from Secret Manager.
+# 3. Deploys the App Bundle to Google Play Console using Fastlane Supply.
+# 4. Saves the Gradle cache back to GCS.
+
+steps:
+  # Step 0: Cancel any previous running builds on this trigger to save build minutes
+  - name: 'gcr.io/google.com/cloudsdktool/google-cloud-cli'
+    id: 'cancel-previous-builds'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Checking for running builds on trigger: $TRIGGER_NAME"
+        running_builds=$$(gcloud builds list --ongoing \
+          --format='value(id)' \
+          --filter="substitutions.TRIGGER_NAME=$TRIGGER_NAME AND id!=$BUILD_ID")
+        
+        for id in $$running_builds; do
+          echo "Cancelling previous build: $$id"
+          gcloud builds cancel $$id
+        done
+
+  # Step 0.5: Restore Gradle Cache from GCS
+  - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'restore-gradle-cache'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Checking for cached Gradle files in gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz..."
+        gsutil cp gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz /workspace/gradle-cache.tar.gz || exit 0
+        if [ -f /workspace/gradle-cache.tar.gz ]; then
+          echo "Cache archive found. Extracting to /home/circleci/.gradle..."
+          mkdir -p /home/circleci/.gradle
+          tar -xzf /workspace/gradle-cache.tar.gz -C /home/circleci/.gradle
+          echo "Cache restoration complete."
+        else
+          echo "No pre-existing cache archive found. Running cold build."
+        fi
+    volumes:
+      - name: 'gradle-cache'
+        path: '/home/circleci/.gradle'
+
+  # Step 1: Build and Publish the Release APK/AAB to Play Store
+  - name: 'docker.io/cimg/android:2024.04'
+    id: 'build-android'
+    entrypoint: 'bash'
+    secretEnv: [
+      'PLAYSTORE_KEY',
+      'RELEASE_KEYSTORE_BASE64',
+      'RELEASE_KEYSTORE_PASSWORD',
+      'RELEASE_KEY_ALIAS',
+      'RELEASE_KEY_PASSWORD'
+    ]
+    args:
+      - '-c'
+      - |
+        # Fix workspace and cache ownership for non-root container user
+        sudo chown -R $$(id -u):$$(id -g) . /home/circleci/.gradle
+        
+        # Write the Play Store API key
+        echo "$$PLAYSTORE_KEY" > play-key.json
+        
+        # Decode the release keystore file
+        echo "$$RELEASE_KEYSTORE_BASE64" | base64 -d > release-key.jks
+        
+        # Grant execute permissions to Gradle wrapper
+        chmod +x gradlew
+        
+        # Build signed release App Bundle (.aab)
+        # Using Android Gradle Plugin's injected signing properties
+        ./gradlew :app:bundleRelease \
+          -Pandroid.injected.signing.store.file=$$(pwd)/release-key.jks \
+          -Pandroid.injected.signing.store.password=$$RELEASE_KEYSTORE_PASSWORD \
+          -Pandroid.injected.signing.key.alias=$$RELEASE_KEY_ALIAS \
+          -Pandroid.injected.signing.key.password=$$RELEASE_KEY_PASSWORD
+        
+        # Publish the release bundle to internal testing track using Fastlane Supply
+        export HOME=/tmp
+        fastlane supply --aab app/build/outputs/bundle/release/app-release.aab \
+                        --track internal \
+                        --json_key play-key.json \
+                        --package_name com.rayt.termux \
+                        --skip_upload_metadata true \
+                        --skip_upload_images true \
+                        --skip_upload_screenshots true \
+                        --skip_upload_changelogs true \
+                        --verbose
+    volumes:
+      - name: 'gradle-cache'
+        path: '/home/circleci/.gradle'
+
+  # Step 1.5: Save Gradle Cache back to GCS
+  - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'save-gradle-cache'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        if [ -d /home/circleci/.gradle ]; then
+          echo "Archiving Gradle cache from /home/circleci/.gradle..."
+          tar -czf /workspace/gradle-cache.tar.gz -C /home/circleci/.gradle .
+          echo "Uploading archive to gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz..."
+          gsutil cp /workspace/gradle-cache.tar.gz gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz
+          echo "Cache upload complete."
+        else
+          echo "No Gradle cache directory found to archive."
+        fi
+    volumes:
+      - name: 'gradle-cache'
+        path: '/home/circleci/.gradle'
+
+# Save the generated builds as artifacts in Google Cloud Storage.
+artifacts:
+  objects:
+    location: 'gs://${_BUCKET_NAME}/builds/$BUILD_ID'
+    paths:
+      - 'app/build/outputs/bundle/release/app-release.aab'
+
+substitutions:
+  _BUCKET_NAME: 'termux-builds-bucket' # Replace with your GCS bucket name in Cloud Build trigger
+
+availableSecrets:
+  secretManager:
+    - versionName: 'projects/$PROJECT_ID/secrets/playstore-upload-key/versions/latest'
+      env: 'PLAYSTORE_KEY'
+    - versionName: 'projects/$PROJECT_ID/secrets/release-keystore-base64/versions/latest'
+      env: 'RELEASE_KEYSTORE_BASE64'
+    - versionName: 'projects/$PROJECT_ID/secrets/release-keystore-password/versions/latest'
+      env: 'RELEASE_KEYSTORE_PASSWORD'
+    - versionName: 'projects/$PROJECT_ID/secrets/release-key-alias/versions/latest'
+      env: 'RELEASE_KEY_ALIAS'
+    - versionName: 'projects/$PROJECT_ID/secrets/release-key-password/versions/latest'
+      env: 'RELEASE_KEY_PASSWORD'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
