@@ -64,6 +64,14 @@ public class TerminalToolbarViewPager {
                     mSavedTextInput = null;
                 }
 
+                // Disallow ViewPager swipe interception when horizontal text scrolling is active
+                editText.setOnTouchListener((v, event) -> {
+                    if (v.hasFocus() && (v.canScrollHorizontally(-1) || v.canScrollHorizontally(1))) {
+                        v.getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    return false;
+                });
+
                 editText.setOnEditorActionListener((v, actionId, event) -> {
                     TerminalSession session = mActivity.getCurrentSession();
                     if (session != null) {
