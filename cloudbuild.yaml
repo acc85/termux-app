@@ -30,8 +30,8 @@ steps:
     args:
       - '-c'
       - |
-        echo "Checking for cached Gradle files in gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz..."
-        gsutil cp gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz /workspace/gradle-cache.tar.gz || exit 0
+        echo "Checking for cached Gradle files in gs://$PROJECT_ID-builds/gradle-cache/gradle-cache.tar.gz..."
+        gsutil cp gs://$PROJECT_ID-builds/gradle-cache/gradle-cache.tar.gz /workspace/gradle-cache.tar.gz || exit 0
         if [ -f /workspace/gradle-cache.tar.gz ]; then
           echo "Cache archive found. Extracting to /home/circleci/.gradle..."
           mkdir -p /home/circleci/.gradle
@@ -80,7 +80,7 @@ steps:
   # Step 2: Upload signed AAB to custom GCS bucket immediately so it's always accessible
   - name: 'gcr.io/cloud-builders/gsutil'
     id: 'backup-aab'
-    args: ['cp', 'app/build/outputs/bundle/release/app-release.aab', 'gs://${_BUCKET_NAME}/builds/$BUILD_ID/app-release.aab']
+    args: ['cp', 'app/build/outputs/bundle/release/app-release.aab', 'gs://$PROJECT_ID-builds/builds/$BUILD_ID/app-release.aab']
 
   # Step 3: Publish the release bundle to internal testing track using Fastlane Supply
   - name: 'docker.io/cimg/android:2024.04'
@@ -117,8 +117,8 @@ steps:
         if [ -d /home/circleci/.gradle ]; then
           echo "Archiving Gradle cache from /home/circleci/.gradle..."
           tar -czf /workspace/gradle-cache.tar.gz -C /home/circleci/.gradle .
-          echo "Uploading archive to gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz..."
-          gsutil cp /workspace/gradle-cache.tar.gz gs://${_BUCKET_NAME}/gradle-cache/gradle-cache.tar.gz
+          echo "Uploading archive to gs://$PROJECT_ID-builds/gradle-cache/gradle-cache.tar.gz..."
+          gsutil cp /workspace/gradle-cache.tar.gz gs://$PROJECT_ID-builds/gradle-cache/gradle-cache.tar.gz
           echo "Cache upload complete."
         else
           echo "No Gradle cache directory found to archive."
@@ -130,7 +130,7 @@ steps:
 # Save the generated builds as artifacts in Google Cloud Storage.
 artifacts:
   objects:
-    location: 'gs://${_BUCKET_NAME}/builds/$BUILD_ID'
+    location: 'gs://$PROJECT_ID-builds/builds/$BUILD_ID'
     paths:
       - 'app/build/outputs/bundle/release/app-release.aab'
 
