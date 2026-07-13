@@ -17,3 +17,11 @@ allprojects {
         maven { url "https://jitpack.io" }
     }
 }
+
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.guava:guava:33.1.2-jre'
+        }
+    }
+}
