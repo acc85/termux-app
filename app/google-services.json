@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "139908654624",
-    "project_id": "termux-play-deploy",
-    "storage_bucket": "termux-play-deploy.appspot.com"
+    "project_number": "943916578419",
+    "project_id": "termux-fdf19",
+    "storage_bucket": "termux-fdf19.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:139908654624:android:mockappiddummy",
+        "mobilesdk_app_id": "1:943916578419:android:a813091489f04e6d2b5c06",
         "android_client_info": {
           "package_name": "com.rayt.termux"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyMockApiKeyDummyStringForCompilation"
+          "current_key": "AIzaSyCo_VefnDHB49c4M6Ied1ytYzvvU7kOE8w"
         }
       ],
       "services": {
