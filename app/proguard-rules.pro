@@ -10,3 +10,6 @@
 -dontobfuscate
 #-renamesourcefileattribute SourceFile
 #-keepattributes SourceFile,LineNumberTable
+
+-dontwarn com.google.common.io.MoreFiles
+-dontwarn com.google.common.io.RecursiveDeleteOption
