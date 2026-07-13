@@ -86,7 +86,13 @@ public class TermuxSession {
         if (executionCommand.workingDirectory.isEmpty())
             executionCommand.workingDirectory = "/";
 
-        String defaultBinPath = shellEnvironmentClient.getDefaultBinPath();
+        boolean cannotExecuteFromDataDir = false;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+                && currentPackageContext.getApplicationInfo().targetSdkVersion >= android.os.Build.VERSION_CODES.Q) {
+            cannotExecuteFromDataDir = true;
+        }
+
+        String defaultBinPath = cannotExecuteFromDataDir ? "/system/bin" : shellEnvironmentClient.getDefaultBinPath();
         if (defaultBinPath.isEmpty())
             defaultBinPath = "/system/bin";
 
