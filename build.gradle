@@ -21,7 +21,7 @@ allprojects {
 subprojects {
     configurations.all {
         resolutionStrategy {
-            force 'com.google.guava:guava:33.1.2-jre'
+            force 'com.google.guava:guava:24.1-jre'
         }
     }
 }
