@@ -145,4 +145,20 @@ public class NotificationUtils {
         return builder;
     }
 
+    /**
+     * Get PendingIntent flags compatible with all Android versions.
+     *
+     * @param extraFlags Extra flags to combine with the mutability flag (e.g. FLAG_UPDATE_CURRENT).
+     * @param mutable True if the PendingIntent needs to be mutable.
+     * @return The flags integer.
+     */
+    public static int getPendingIntentFlags(int extraFlags, boolean mutable) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return extraFlags | (mutable ? PendingIntent.FLAG_MUTABLE : PendingIntent.FLAG_IMMUTABLE);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return extraFlags | (mutable ? 0 : PendingIntent.FLAG_IMMUTABLE);
+        }
+        return extraFlags;
+    }
+
 }
